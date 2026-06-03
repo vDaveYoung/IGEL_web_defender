@@ -76,6 +76,12 @@ const savedNode = document.getElementById("saved");
 
 const playAgainBtn = document.getElementById("play-again");
 const boardTabs = [...document.querySelectorAll(".board-tab")];
+const helpOpenBtn = document.getElementById("help-open");
+
+const tutorialOverlay = document.getElementById("tutorial-overlay");
+const tutorialStepNode = document.getElementById("tutorial-step");
+const tutorialNextBtn = document.getElementById("tutorial-next");
+const tutorialSkipBtn = document.getElementById("tutorial-skip");
 
 const canvas = document.getElementById("game-canvas");
 const ctx = canvas.getContext("2d");
@@ -85,6 +91,16 @@ let mission = null;
 let running = false;
 let rafId = null;
 let lastTick = 0;
+let tutorialIndex = 0;
+
+const TUTORIAL_KEY = "sectorWarsTutorialSeen_v1";
+const tutorialSteps = [
+  "Step 1: Fill out lead capture and continue to missions.",
+  "Step 2: Pick a mission sector. Every round lasts 75 seconds.",
+  "Step 3: Aim with mouse or touch and click (or press Space) to fire.",
+  "Step 4: Stop threats before they reach endpoint nodes around the arena.",
+  "Step 5: Use IGEL capability buttons for shields, recovery, and threat control.",
+];
 
 const state = {
   timeLeft: ROUND_SECONDS,
@@ -109,6 +125,28 @@ const state = {
 function showScreen(key) {
   Object.values(screens).forEach((s) => s.classList.remove("active"));
   screens[key].classList.add("active");
+}
+
+function showTutorial(index = 0) {
+  tutorialIndex = index;
+  tutorialStepNode.textContent = tutorialSteps[tutorialIndex] || tutorialSteps[0];
+  tutorialNextBtn.textContent = tutorialIndex >= tutorialSteps.length - 1 ? "Done" : "Next";
+  tutorialOverlay.classList.remove("hidden");
+}
+
+function hideTutorial(markSeen = true) {
+  tutorialOverlay.classList.add("hidden");
+  if (markSeen) {
+    localStorage.setItem(TUTORIAL_KEY, "1");
+  }
+}
+
+function nextTutorialStep() {
+  if (tutorialIndex >= tutorialSteps.length - 1) {
+    hideTutorial(true);
+    return;
+  }
+  showTutorial(tutorialIndex + 1);
 }
 
 function buildMissions() {
@@ -554,6 +592,19 @@ playAgainBtn.addEventListener("click", () => {
   showScreen("mission");
 });
 
+helpOpenBtn.addEventListener("click", () => {
+  showTutorial(0);
+});
+
+tutorialNextBtn.addEventListener("click", nextTutorialStep);
+tutorialSkipBtn.addEventListener("click", () => hideTutorial(true));
+
+tutorialOverlay.addEventListener("click", (event) => {
+  if (event.target === tutorialOverlay) {
+    hideTutorial(true);
+  }
+});
+
 for (const tab of boardTabs) {
   tab.addEventListener("click", async () => {
     boardTabs.forEach((b) => b.classList.remove("active"));
@@ -564,3 +615,7 @@ for (const tab of boardTabs) {
 
 buildMissions();
 showScreen("lead");
+
+if (!localStorage.getItem(TUTORIAL_KEY)) {
+  showTutorial(0);
+}

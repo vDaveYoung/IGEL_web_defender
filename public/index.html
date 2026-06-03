@@ -16,6 +16,9 @@
         <p class="eyebrow">IGEL Conference Experience</p>
         <h1>Edge Defender: Sector Wars</h1>
         <p class="subtitle">Protect mission-critical edge systems against cyber assaults using IGEL defensive powers.</p>
+        <div class="brand-actions">
+          <button id="help-open" type="button" class="help-btn">How to Play</button>
+        </div>
       </header>
 
       <section id="lead-screen" class="panel screen active">
@@ -66,6 +69,17 @@
           <button data-board="all" class="board-tab">Event</button>
         </div>
         <div id="leaderboard" class="leaderboard"></div>
+      </section>
+
+      <section id="tutorial-overlay" class="tutorial-overlay hidden" aria-live="polite" aria-modal="true" role="dialog">
+        <article class="tutorial-card">
+          <h2>How to Play</h2>
+          <p id="tutorial-step" class="tutorial-step"></p>
+          <div class="tutorial-actions">
+            <button id="tutorial-next" type="button">Next</button>
+            <button id="tutorial-skip" type="button" class="tutorial-skip">Skip</button>
+          </div>
+        </article>
       </section>
     </main>
 
