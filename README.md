@@ -36,11 +36,21 @@ npm start
 
 Open: http://localhost:8833
 
+Conference display mode:
+
+- http://localhost:8833/display.html
+
 ## API
 
 - `GET /api/healthz`
 - `GET /api/leaderboard?mission=healthcare|finance|government|military|legal`
 - `POST /api/submit-score`
+
+## Display Mode
+
+- Rotates between event-wide and per-sector leaderboards every 10 seconds.
+- Designed for booth TV or wallboard usage.
+- Refreshes automatically and highlights the current top defender.
 
 Score data persists in:
 

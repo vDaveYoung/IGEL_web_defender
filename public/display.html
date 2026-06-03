@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sector Wars Display Mode</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/display.css" />
+  </head>
+  <body>
+    <main class="wallboard">
+      <header class="topbar">
+        <div>
+          <p class="kicker">IGEL Live Booth Ranking</p>
+          <h1>Edge Defender: Sector Wars</h1>
+        </div>
+        <div class="meta">
+          <span id="mode-label">Mode: Event</span>
+          <span id="updated-at">Updated: --</span>
+        </div>
+      </header>
+
+      <section class="hero-grid">
+        <article class="hero-card champion">
+          <h2>Current Champion</h2>
+          <div id="champion" class="champion-body">Waiting for first score...</div>
+        </article>
+
+        <article class="hero-card ticker">
+          <h2>Live Status</h2>
+          <p id="status-line">Loading leaderboard...</p>
+          <div class="dots" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+        </article>
+      </section>
+
+      <section class="boards">
+        <article class="board">
+          <h3 id="board-title">Event Top 10</h3>
+          <div id="rows" class="rows"></div>
+        </article>
+      </section>
+    </main>
+
+    <script src="/display.js" defer></script>
+  </body>
+</html>
