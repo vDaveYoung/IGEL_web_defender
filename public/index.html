@@ -3,72 +3,69 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>IGEL Web Defender</title>
+    <title>Edge Defender: Sector Wars</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="bg-grid" aria-hidden="true"></div>
-    <main class="shell">
-      <header class="hero card reveal">
-        <p class="kicker">Threat Intel Workbench</p>
-        <h1>IGEL Web Defender 1.0</h1>
-        <p class="hero-copy">
-          Search CVEs from NVD, then compare likely endpoint impact across Windows and IGEL OS.
-        </p>
+    <div class="nebula" aria-hidden="true"></div>
+    <main class="app-shell">
+      <header class="brand-panel panel">
+        <p class="eyebrow">IGEL Conference Experience</p>
+        <h1>Edge Defender: Sector Wars</h1>
+        <p class="subtitle">Protect mission-critical edge systems against cyber assaults using IGEL defensive powers.</p>
       </header>
 
-      <section class="search card reveal">
-        <form id="search-form" autocomplete="off">
-          <label for="query" class="label">CVE Query</label>
-          <div class="search-row">
-            <input
-              id="query"
-              name="query"
-              type="text"
-              placeholder="Try CVE-2021-34527 or OpenSSL"
-              required
-            />
-            <button type="submit">Search</button>
-          </div>
+      <section id="lead-screen" class="panel screen active">
+        <h2>Step 1: Lead Capture</h2>
+        <form id="lead-form" class="lead-grid">
+          <input id="firstName" placeholder="First Name" required />
+          <input id="lastName" placeholder="Last Name" required />
+          <input id="company" placeholder="Company" required />
+          <input id="email" placeholder="Email" type="email" required />
+          <input id="jobRole" placeholder="Job Role (optional)" />
+          <label class="checkbox-row">
+            <input id="optIn" type="checkbox" />
+            <span>I consent to follow-up communications.</span>
+          </label>
+          <button type="submit">Continue to Missions</button>
         </form>
-        <p id="status" class="status">Ready.</p>
       </section>
 
-      <section id="results" class="results reveal"></section>
+      <section id="mission-screen" class="panel screen">
+        <h2>Step 2: Choose Mission</h2>
+        <div id="mission-grid" class="mission-grid"></div>
+      </section>
 
-      <section id="analysis" class="analysis hidden">
-        <article class="summary card reveal">
-          <h2>Exploit Summary</h2>
-          <p id="exploit-summary"></p>
-          <p id="confidence" class="confidence"></p>
-        </article>
+      <section id="game-screen" class="panel screen">
+        <div class="hud">
+          <div class="stats">
+            <span id="timer">75s</span>
+            <span id="score">Score: 0</span>
+            <span id="threats">Threats Stopped: 0</span>
+            <span id="saved">Endpoints Saved: 5</span>
+          </div>
+          <div id="capabilities" class="capabilities"></div>
+        </div>
+        <canvas id="game-canvas" width="960" height="540" aria-label="Sector Wars game board"></canvas>
+      </section>
 
-        <div class="compare-grid">
-          <article class="impact windows card reveal">
-            <h3>Windows</h3>
-            <p id="windows-state" class="state"></p>
-            <p id="windows-assessment"></p>
-            <p id="windows-mitigation" class="mitigation"></p>
-          </article>
-
-          <article class="impact igel card reveal">
-            <h3>IGEL OS</h3>
-            <p id="igel-state" class="state"></p>
-            <p id="igel-assessment"></p>
-            <p id="igel-mitigation" class="mitigation"></p>
-          </article>
+      <section id="result-screen" class="panel screen">
+        <h2>Mission Report</h2>
+        <div id="summary" class="summary"></div>
+        <div class="result-actions">
+          <button id="play-again">Run Another Mission</button>
+          <a class="cta" href="#" id="demo-link">Book a Demo</a>
         </div>
 
-        <article class="disclaimer card reveal">
-          <h4>Advisory Note</h4>
-          <p id="disclaimer"></p>
-        </article>
+        <h3>Leaderboard</h3>
+        <div class="leaderboard-tabs">
+          <button data-board="mission" class="board-tab active">Mission</button>
+          <button data-board="all" class="board-tab">Event</button>
+        </div>
+        <div id="leaderboard" class="leaderboard"></div>
       </section>
     </main>
 
