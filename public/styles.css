@@ -17,6 +17,7 @@ body {
   color: var(--text);
   background: radial-gradient(circle at 20% 0%, #1a244a 0%, transparent 35%), radial-gradient(circle at 85% 0%, #3a224d 0%, transparent 30%), linear-gradient(180deg, #04060d, var(--bg));
   min-height: 100vh;
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 .nebula {
@@ -39,6 +40,7 @@ body {
   border-radius: 16px;
   padding: 1rem;
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
 }
 
@@ -82,6 +84,10 @@ input, button {
   font: inherit;
 }
 
+textarea {
+  font: inherit;
+}
+
 input {
   width: 100%;
   border: 1px solid rgba(140, 183, 255, 0.32);
@@ -89,6 +95,56 @@ input {
   background: rgba(7, 12, 24, 0.92);
   color: var(--text);
   padding: 0.7rem 0.8rem;
+  min-height: 44px;
+}
+
+.badge-raw {
+  width: 100%;
+  min-height: 88px;
+  resize: vertical;
+  border: 1px solid rgba(140, 183, 255, 0.32);
+  border-radius: 10px;
+  background: rgba(7, 12, 24, 0.92);
+  color: var(--text);
+  padding: 0.7rem 0.8rem;
+  grid-column: 1 / -1;
+}
+
+.badge-scan-controls {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.badge-video {
+  grid-column: 1 / -1;
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(130, 174, 255, 0.42);
+  background: #040814;
+  max-height: 220px;
+  object-fit: cover;
+}
+
+.scan-status {
+  grid-column: 1 / -1;
+  margin: 0;
+  min-height: 1.1rem;
+  color: var(--muted);
+}
+
+.secondary-btn {
+  background: rgba(26, 47, 83, 0.95);
+  border: 1px solid rgba(130, 174, 255, 0.45);
+}
+
+.form-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  min-height: 1.2rem;
+  color: #ff9cae;
+  font-weight: 700;
 }
 
 .checkbox-row {
@@ -104,6 +160,7 @@ button, .cta {
   background: linear-gradient(135deg, #1f6dff, #00b8d8);
   color: white;
   padding: 0.7rem 0.95rem;
+  min-height: 44px;
   font-weight: 700;
   cursor: pointer;
   text-decoration: none;
@@ -158,7 +215,7 @@ button, .cta {
 .cap-btn {
   padding: 0.55rem;
   font-size: 0.88rem;
-  min-height: 52px;
+  min-height: 56px;
   border: 1px solid rgba(135, 188, 255, 0.35);
   background: rgba(13, 28, 54, 0.95);
 }
@@ -170,10 +227,32 @@ button, .cta {
 
 #game-canvas {
   width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 72vh;
+  touch-action: none;
   margin-top: 0.75rem;
   border-radius: 12px;
   border: 1px solid rgba(139, 194, 255, 0.44);
   background: linear-gradient(180deg, #081024, #090d1a);
+}
+
+.mobile-controls {
+  display: none;
+  margin-top: 0.75rem;
+}
+
+.fire-btn {
+  width: 100%;
+  min-height: 58px;
+  font-family: Orbitron, sans-serif;
+  letter-spacing: 0.08em;
+  border: 1px solid rgba(163, 209, 255, 0.45);
+  background: linear-gradient(135deg, #ff7a37, #ff4040);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+}
+
+.fire-btn:active {
+  transform: translateY(1px) scale(0.99);
 }
 
 .summary {
@@ -184,8 +263,14 @@ button, .cta {
 
 .result-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.6rem;
   margin: 0.9rem 0;
+}
+
+.hidden {
+  display: none !important;
+  pointer-events: none !important;
 }
 
 .leaderboard-tabs { display: flex; gap: 0.5rem; margin-bottom: 0.6rem; }
@@ -244,12 +329,60 @@ button, .cta {
 }
 
 @media (max-width: 900px) {
+  .app-shell {
+    width: min(1120px, calc(100% - 1rem));
+  }
+
+  .panel {
+    padding: 0.85rem;
+  }
+
   .mission-grid { grid-template-columns: 1fr 1fr; }
   .capabilities { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 680px) {
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+  }
+
+  .stats span {
+    text-align: center;
+  }
+
   .lead-grid, .mission-grid { grid-template-columns: 1fr; }
+  .badge-scan-controls {
+    flex-direction: column;
+  }
   .leaderboard-row { grid-template-columns: 34px 1fr 80px 70px; font-size: 0.92rem; }
   .tutorial-actions { flex-direction: column; }
+
+  #game-canvas {
+    max-height: 56vh;
+  }
+
+  .mobile-controls {
+    display: block;
+    position: sticky;
+    bottom: 0;
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0));
+    background: linear-gradient(180deg, rgba(7, 11, 23, 0), rgba(7, 11, 23, 0.92) 22%, rgba(7, 11, 23, 1));
+  }
+}
+
+@media (max-width: 460px) {
+  .capabilities {
+    grid-template-columns: 1fr;
+  }
+
+  .result-actions {
+    flex-direction: column;
+  }
+
+  button,
+  .cta {
+    width: 100%;
+  }
 }

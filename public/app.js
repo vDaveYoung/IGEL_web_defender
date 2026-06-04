@@ -82,9 +82,21 @@ const tutorialOverlay = document.getElementById("tutorial-overlay");
 const tutorialStepNode = document.getElementById("tutorial-step");
 const tutorialNextBtn = document.getElementById("tutorial-next");
 const tutorialSkipBtn = document.getElementById("tutorial-skip");
+const mobileFireBtn = document.getElementById("mobile-fire");
+const parseBadgeBtn = document.getElementById("parse-badge");
+const leadErrorNode = document.getElementById("lead-error");
+const scanBadgeStartBtn = document.getElementById("scan-badge-start");
+const scanBadgeStopBtn = document.getElementById("scan-badge-stop");
+const badgeVideo = document.getElementById("badge-video");
+const scanStatusNode = document.getElementById("scan-status");
 
 const canvas = document.getElementById("game-canvas");
 const ctx = canvas.getContext("2d");
+
+if (badgeVideo) {
+  badgeVideo.setAttribute("playsinline", "");
+  badgeVideo.setAttribute("webkit-playsinline", "");
+}
 
 let lead = null;
 let mission = null;
@@ -92,12 +104,18 @@ let running = false;
 let rafId = null;
 let lastTick = 0;
 let tutorialIndex = 0;
+let mobileFireIntervalId = null;
+let badgeScanStream = null;
+let badgeScanRafId = null;
+let badgeDetector = null;
+let badgeScanActive = false;
 
 const TUTORIAL_KEY = "sectorWarsTutorialSeen_v1";
+const LOCAL_SCORES_KEY = "sectorWarsScores_v1";
 const tutorialSteps = [
   "Step 1: Fill out lead capture and continue to missions.",
   "Step 2: Pick a mission sector. Every round lasts 75 seconds.",
-  "Step 3: Aim with mouse or touch and click (or press Space) to fire.",
+  "Step 3: Drag or tap the arena to aim and fire (or press Space).",
   "Step 4: Stop threats before they reach endpoint nodes around the arena.",
   "Step 5: Use IGEL capability buttons for shields, recovery, and threat control.",
 ];
@@ -121,6 +139,32 @@ const state = {
   spawnTick: 0,
   bossSpawned: false,
 };
+
+function apiUrl(path) {
+  const cleanPath = String(path || "").replace(/^\/+/, "");
+  return new URL(cleanPath, window.location.href).toString();
+}
+
+function getLocalScores() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LOCAL_SCORES_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function setLocalScores(scores) {
+  localStorage.setItem(LOCAL_SCORES_KEY, JSON.stringify(scores));
+}
+
+function rankScores(scores, missionId = "") {
+  const filtered = missionId ? scores.filter((s) => s.mission === missionId) : scores;
+  return filtered
+    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
+    .slice(0, 20)
+    .map((s, idx) => ({ ...s, rank: idx + 1 }));
+}
 
 function showScreen(key) {
   Object.values(screens).forEach((s) => s.classList.remove("active"));
@@ -164,8 +208,174 @@ function missionById(id) {
   return MISSIONS.find((m) => m.id === id);
 }
 
+function setScanStatus(message) {
+  if (scanStatusNode) {
+    scanStatusNode.textContent = message || "";
+  }
+}
+
+function parseBadgeText(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return null;
+
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const joined = lines.join(" | ");
+  const email = (joined.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i) || [""])[0];
+  const phone = (joined.match(/(\+?\d[\d\s().-]{7,}\d)/) || [""])[0];
+  const badgeId = (joined.match(/(?:badge\s*id|id|badge)\s*[:#-]?\s*([A-Z0-9-]{3,})/i) || ["", ""])[1];
+
+  let firstName = "";
+  let lastName = "";
+  if (lines.length) {
+    const nameLine = lines[0].replace(/[^A-Za-z\s'-]/g, " ").replace(/\s+/g, " ").trim();
+    const parts = nameLine.split(" ").filter(Boolean);
+    if (parts.length >= 2) {
+      firstName = parts[0];
+      lastName = parts.slice(1).join(" ");
+    }
+  }
+
+  let company = "";
+  if (lines.length > 1) {
+    company = lines.find((line) => !line.includes("@") && !/badge\s*id|^id[:#-]?/i.test(line)) || "";
+    if (company === lines[0]) company = "";
+  }
+
+  return {
+    firstName,
+    lastName,
+    company,
+    email,
+    phone,
+    badgeId,
+  };
+}
+
+function applyParsedBadge(parsed) {
+  if (!parsed) return;
+
+  const firstNameNode = document.getElementById("firstName");
+  const lastNameNode = document.getElementById("lastName");
+  const companyNode = document.getElementById("company");
+  const emailNode = document.getElementById("email");
+  const phoneNode = document.getElementById("phone");
+  const badgeIdNode = document.getElementById("badgeId");
+
+  if (!firstNameNode.value && parsed.firstName) firstNameNode.value = parsed.firstName;
+  if (!lastNameNode.value && parsed.lastName) lastNameNode.value = parsed.lastName;
+  if (!companyNode.value && parsed.company) companyNode.value = parsed.company;
+  if (!emailNode.value && parsed.email) emailNode.value = parsed.email;
+  if (!phoneNode.value && parsed.phone) phoneNode.value = parsed.phone;
+  if (!badgeIdNode.value && parsed.badgeId) badgeIdNode.value = parsed.badgeId;
+}
+
+function stopBadgeScan() {
+  badgeScanActive = false;
+  if (badgeScanRafId) {
+    cancelAnimationFrame(badgeScanRafId);
+    badgeScanRafId = null;
+  }
+
+  if (badgeScanStream) {
+    for (const track of badgeScanStream.getTracks()) {
+      track.stop();
+    }
+    badgeScanStream = null;
+  }
+
+  if (badgeVideo) {
+    badgeVideo.pause();
+    badgeVideo.srcObject = null;
+    badgeVideo.classList.add("hidden");
+  }
+
+  if (scanBadgeStopBtn) scanBadgeStopBtn.classList.add("hidden");
+  if (scanBadgeStartBtn) scanBadgeStartBtn.disabled = false;
+}
+
+async function detectBadgeLoop() {
+  if (!badgeScanActive || !badgeDetector || !badgeVideo) return;
+
+  try {
+    const found = await badgeDetector.detect(badgeVideo);
+    if (Array.isArray(found) && found.length > 0) {
+      const rawValue = String(found[0].rawValue || "").trim();
+      if (rawValue) {
+        const badgeRawNode = document.getElementById("badgeRaw");
+        badgeRawNode.value = rawValue;
+        const parsed = parseBadgeText(rawValue);
+        applyParsedBadge(parsed);
+        setScanStatus("Badge captured. Fields auto-filled.");
+        stopBadgeScan();
+        return;
+      }
+    }
+  } catch {
+    setScanStatus("Scan read failed. Try again or paste badge text.");
+    stopBadgeScan();
+    return;
+  }
+
+  badgeScanRafId = requestAnimationFrame(detectBadgeLoop);
+}
+
+async function startBadgeScan() {
+  leadErrorNode.textContent = "";
+
+  if (!window.isSecureContext) {
+    setScanStatus("Camera scan needs HTTPS or localhost. Use badge paste on this host.");
+    return;
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setScanStatus("Camera not available in this browser. Use badge paste.");
+    return;
+  }
+
+  if (!("BarcodeDetector" in window)) {
+    setScanStatus("Barcode scan unsupported in this browser. Use badge paste or scanner wedge.");
+    return;
+  }
+
+  try {
+    let formats = ["qr_code", "pdf417", "code_128", "code_39", "data_matrix", "aztec"];
+    if (typeof window.BarcodeDetector.getSupportedFormats === "function") {
+      const supported = await window.BarcodeDetector.getSupportedFormats();
+      formats = formats.filter((f) => supported.includes(f));
+      if (!formats.length) {
+        setScanStatus("No supported badge barcode formats found. Use badge paste.");
+        return;
+      }
+    }
+
+    badgeDetector = new window.BarcodeDetector({ formats });
+    badgeScanStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    });
+
+    badgeVideo.srcObject = badgeScanStream;
+    badgeVideo.classList.remove("hidden");
+    await badgeVideo.play();
+
+    if (scanBadgeStartBtn) scanBadgeStartBtn.disabled = true;
+    if (scanBadgeStopBtn) scanBadgeStopBtn.classList.remove("hidden");
+
+    setScanStatus("Scanning badge... point camera at QR/PDF417 code.");
+    badgeScanActive = true;
+    detectBadgeLoop();
+  } catch {
+    stopBadgeScan();
+    setScanStatus("Unable to start camera scan. Check permissions or use badge paste.");
+  }
+}
+
 function initAssets() {
-  const r = 160;
+  const r = Math.max(100, Math.min(180, Math.floor(Math.min(canvas.width, canvas.height) * 0.3)));
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;
   state.assets = mission.assets.map((name, idx) => {
@@ -240,18 +450,19 @@ function aimAt(mouseX, mouseY) {
   state.player.angle = Math.atan2(mouseY - state.player.y, mouseX - state.player.x);
 }
 
-canvas.addEventListener("mousemove", (e) => {
-  if (!running) return;
+function pointFromClient(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
-  aimAt((e.clientX - rect.left) * (canvas.width / rect.width), (e.clientY - rect.top) * (canvas.height / rect.height));
-});
+  return {
+    x: (clientX - rect.left) * (canvas.width / rect.width),
+    y: (clientY - rect.top) * (canvas.height / rect.height),
+  };
+}
 
-canvas.addEventListener("touchmove", (e) => {
-  if (!running || e.touches.length === 0) return;
-  const rect = canvas.getBoundingClientRect();
-  const t = e.touches[0];
-  aimAt((t.clientX - rect.left) * (canvas.width / rect.width), (t.clientY - rect.top) * (canvas.height / rect.height));
-}, { passive: true });
+canvas.addEventListener("pointermove", (e) => {
+  if (!running) return;
+  const p = pointFromClient(e.clientX, e.clientY);
+  aimAt(p.x, p.y);
+});
 
 function fire() {
   if (!running) return;
@@ -265,7 +476,28 @@ function fire() {
   });
 }
 
-canvas.addEventListener("click", fire);
+function startMobileAutoFire() {
+  if (!running) return;
+  fire();
+  if (mobileFireIntervalId) return;
+  mobileFireIntervalId = window.setInterval(() => {
+    fire();
+  }, 170);
+}
+
+function stopMobileAutoFire() {
+  if (!mobileFireIntervalId) return;
+  window.clearInterval(mobileFireIntervalId);
+  mobileFireIntervalId = null;
+}
+
+canvas.addEventListener("pointerdown", (e) => {
+  if (!running) return;
+  const p = pointFromClient(e.clientX, e.clientY);
+  aimAt(p.x, p.y);
+  fire();
+});
+
 window.addEventListener("keydown", (e) => {
   if (e.code === "Space") {
     e.preventDefault();
@@ -483,28 +715,52 @@ function loop(ts) {
 }
 
 async function submitScore() {
+  const payload = {
+    ...lead,
+    mission: mission.id,
+    score: state.score,
+    threatsStopped: state.threatsStopped,
+    endpointsSaved: state.endpointsSaved,
+    bestCapability: state.bestCapability,
+  };
+
   try {
-    await fetch("/api/submit-score", {
+    const response = await fetch(apiUrl("api/submit-score"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...lead,
-        mission: mission.id,
-        score: state.score,
-        threatsStopped: state.threatsStopped,
-        endpointsSaved: state.endpointsSaved,
-        bestCapability: state.bestCapability,
-      }),
+      body: JSON.stringify(payload),
     });
+
+    if (!response.ok) {
+      throw new Error("Submit failed");
+    }
   } catch (_err) {
-    // non-blocking for conference flow
+    const localScores = getLocalScores();
+    localScores.push({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: `${lead.firstName} ${lead.lastName}`.trim(),
+      company: lead.company,
+      mission: mission.id,
+      score: state.score,
+      threatsStopped: state.threatsStopped,
+      endpointsSaved: state.endpointsSaved,
+      createdAt: new Date().toISOString(),
+    });
+    setLocalScores(localScores);
   }
 }
 
 async function loadLeaderboard(mode = "mission") {
-  const qs = mode === "mission" ? `?mission=${mission.id}` : "";
+  const missionFilter = mode === "mission" ? mission.id : "";
+  const qs = missionFilter ? `?mission=${missionFilter}` : "";
+
   try {
-    const resp = await fetch(`/api/leaderboard${qs}`);
+    const resp = await fetch(apiUrl(`api/leaderboard${qs}`));
+
+    if (!resp.ok) {
+      throw new Error("Leaderboard request failed");
+    }
+
     const data = await resp.json();
     const entries = data.entries || [];
 
@@ -520,7 +776,18 @@ async function loadLeaderboard(mode = "mission") {
       )
       .join("");
   } catch {
-    leaderboardNode.innerHTML = '<p class="leaderboard-empty">Leaderboard unavailable.</p>';
+    const entries = rankScores(getLocalScores(), missionFilter);
+    if (!entries.length) {
+      leaderboardNode.innerHTML = '<p class="leaderboard-empty">No scores yet. Be the first defender.</p>';
+      return;
+    }
+
+    leaderboardNode.innerHTML = entries
+      .map(
+        (e) =>
+          `<div class="leaderboard-row"><strong>#${e.rank}</strong><span>${e.name} · ${e.company}</span><span>${e.mission}</span><strong>${e.score}</strong></div>`
+      )
+      .join("");
   }
 }
 
@@ -539,6 +806,7 @@ function bestCapabilityName() {
 
 async function finishRun() {
   running = false;
+  stopMobileAutoFire();
   if (rafId) cancelAnimationFrame(rafId);
 
   if (state.assets.every((a) => a.alive)) {
@@ -562,12 +830,14 @@ async function finishRun() {
 }
 
 function startMission(id) {
+  stopBadgeScan();
   mission = missionById(id);
   resetState();
   initAssets();
   buildCapabilities();
   updateHud();
   showScreen("game");
+  screens.game.scrollIntoView({ behavior: "smooth", block: "start" });
   running = true;
   lastTick = 0;
   rafId = requestAnimationFrame(loop);
@@ -575,18 +845,60 @@ function startMission(id) {
 
 leadForm.addEventListener("submit", (e) => {
   e.preventDefault();
+  leadErrorNode.textContent = "";
+
   lead = {
     firstName: document.getElementById("firstName").value.trim(),
     lastName: document.getElementById("lastName").value.trim(),
     company: document.getElementById("company").value.trim(),
     email: document.getElementById("email").value.trim(),
+    phone: document.getElementById("phone").value.trim(),
     jobRole: document.getElementById("jobRole").value.trim(),
+    badgeId: document.getElementById("badgeId").value.trim(),
+    badgeRaw: document.getElementById("badgeRaw").value.trim(),
     optIn: document.getElementById("optIn").checked,
   };
 
-  if (!lead.firstName || !lead.lastName || !lead.company || !lead.email) return;
+  if (!lead.firstName || !lead.lastName || !lead.company || !lead.email) {
+    leadErrorNode.textContent = "Please complete required fields before continuing.";
+    return;
+  }
+
+  if (!lead.optIn) {
+    leadErrorNode.textContent = "Consent is required before gameplay at this event.";
+    return;
+  }
+
   showScreen("mission");
 });
+
+if (parseBadgeBtn) {
+  parseBadgeBtn.addEventListener("click", () => {
+    leadErrorNode.textContent = "";
+    const raw = document.getElementById("badgeRaw").value;
+    const parsed = parseBadgeText(raw);
+    if (!parsed) {
+      leadErrorNode.textContent = "Paste badge text first, then try Auto-Fill.";
+      return;
+    }
+
+    applyParsedBadge(parsed);
+    setScanStatus("Badge text parsed and fields updated.");
+  });
+}
+
+if (scanBadgeStartBtn) {
+  scanBadgeStartBtn.addEventListener("click", () => {
+    startBadgeScan();
+  });
+}
+
+if (scanBadgeStopBtn) {
+  scanBadgeStopBtn.addEventListener("click", () => {
+    stopBadgeScan();
+    setScanStatus("Badge scan stopped.");
+  });
+}
 
 playAgainBtn.addEventListener("click", () => {
   showScreen("mission");
@@ -605,6 +917,16 @@ tutorialOverlay.addEventListener("click", (event) => {
   }
 });
 
+if (mobileFireBtn) {
+  mobileFireBtn.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    startMobileAutoFire();
+  });
+  mobileFireBtn.addEventListener("pointerup", stopMobileAutoFire);
+  mobileFireBtn.addEventListener("pointercancel", stopMobileAutoFire);
+  mobileFireBtn.addEventListener("pointerleave", stopMobileAutoFire);
+}
+
 for (const tab of boardTabs) {
   tab.addEventListener("click", async () => {
     boardTabs.forEach((b) => b.classList.remove("active"));
@@ -619,3 +941,7 @@ showScreen("lead");
 if (!localStorage.getItem(TUTORIAL_KEY)) {
   showTutorial(0);
 }
+
+window.addEventListener("beforeunload", () => {
+  stopBadgeScan();
+});

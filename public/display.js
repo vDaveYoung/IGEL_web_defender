@@ -8,6 +8,7 @@ const modes = [
 ];
 
 let modeIndex = 0;
+const LOCAL_SCORES_KEY = "sectorWarsScores_v1";
 
 const modeLabel = document.getElementById("mode-label");
 const updatedAt = document.getElementById("updated-at");
@@ -15,6 +16,28 @@ const boardTitle = document.getElementById("board-title");
 const rows = document.getElementById("rows");
 const champion = document.getElementById("champion");
 const statusLine = document.getElementById("status-line");
+
+function apiUrl(path) {
+  const cleanPath = String(path || "").replace(/^\/+/, "");
+  return new URL(cleanPath, window.location.href).toString();
+}
+
+function getLocalScores() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LOCAL_SCORES_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function rankScores(scores, missionId = "") {
+  const filtered = missionId ? scores.filter((s) => s.mission === missionId) : scores;
+  return filtered
+    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
+    .slice(0, 10)
+    .map((s, idx) => ({ ...s, rank: idx + 1 }));
+}
 
 function fmtTime(iso) {
   try {
@@ -72,14 +95,20 @@ async function loadMode(mode) {
   boardTitle.textContent = mode.title;
   statusLine.textContent = `Refreshing ${mode.label} leaderboard...`;
 
-  const response = await fetch(`/api/leaderboard${mode.query}`);
-  const data = await response.json();
+  let entries = [];
 
-  if (!response.ok) {
-    throw new Error(data.error || "Leaderboard unavailable");
+  try {
+    const response = await fetch(apiUrl(`api/leaderboard${mode.query}`));
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Leaderboard unavailable");
+    }
+    entries = data.entries || [];
+  } catch {
+    const mission = mode.query ? mode.query.replace("?mission=", "") : "";
+    entries = rankScores(getLocalScores(), mission);
   }
 
-  const entries = data.entries || [];
   renderRows(entries);
   renderChampion(entries[0]);
   statusLine.textContent = entries.length
